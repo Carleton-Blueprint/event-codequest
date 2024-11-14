@@ -6,7 +6,7 @@
 
 ## The Challenge
 
-Participants are given [a set of algorithms](#challenge-algorithms) to implement and visualize. Resources to learn these algorithms for those who are unfamiliar will be provided.
+Participants are given [a set of algorithms](#algorithms) to implement and visualize. Resources to learn these algorithms for those who are unfamiliar will be provided.
 
 
 They will be judged on the quality of their visualization and the correctness or complexity of their implementation.
@@ -59,6 +59,9 @@ COMP 3804
 :   - [SnakeLadderViz by voidranjer](https://editor.p5js.org/voidranjer/full/jzAUCf0Gd)
     - [HeapViz by voidranjer](https://editor.p5js.org/voidranjer/full/Pr-L2w8HW)
 
+### Suggested Technologies
+
+{{ read_csv("suggested_tech.csv") }}
 
 ### Algorithm Sources
 
@@ -118,11 +121,6 @@ Exclusive CUSEC sponsor
 ## Cheating Policy
 
 - Presentation? Explain code
-
-
-## Suggested Technologies
-
-{{ read_csv("suggested_tech.csv") }}
 
 
 ## Scattered notes (pls ignore)
