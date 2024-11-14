@@ -1,7 +1,7 @@
 # --- Site ---
-site_name: MkDocs
-site_url: https://mkdocs.cublueprint.org
-repo_url: https://github.com/carleton-blueprint/template-mkdocs
+site_name: CodeQuest
+site_url: https://codequest.cublueprint.org
+repo_url: https://github.com/carleton-blueprint/event-codequest
 
 # --- Navigation ---
 nav:
