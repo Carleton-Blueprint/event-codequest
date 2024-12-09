@@ -119,7 +119,20 @@ class Dijkstra(Scene):
 
 
 if __name__ == "__main__":
-    scene = Dijkstra()
-    scene.render()
+    # scene = Dijkstra()
+    # scene.render()
 
     # open_media_file(scene.renderer.file_writer.movie_file_path)
+
+    values = []
+
+    start = 500
+    curr_val = start
+
+    while curr_val > 100:
+        values.append(curr_val)
+        curr_val = round(
+            curr_val * random.uniform(0.8, 1)
+        )  # might use perlin noise here
+
+    print(values)
