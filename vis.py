@@ -121,28 +121,32 @@ class Graph:
 class Dijkstra(Scene):
     def construct(self):
 
-        node_a = Node("A", radius=0.3, pos=(-3, -2))
-        node_b = Node("B", radius=0.3, pos=(3, -3.5))
-        node_c = Node("C", radius=0.3, pos=(0, 0))
-
         graph_src = [
-            node_a,
-            node_b,
-            node_c,
+            Node("A", radius=0.3, pos=(-3, -2)),
+            Node("B", radius=0.3, pos=(3, -3.5)),
+            Node("C", radius=0.3, pos=(0, 0)),
+            Node("D", radius=0.3, pos=(3, 3)),
+            Node("E", radius=0.3, pos=(-3, 3)),
+            Node("F", radius=0.3, pos=(5, -2)),
+            Node("G", radius=0.3, pos=(4, 3)),
+            Node("H", radius=0.3, pos=(6, 0)),
         ]
 
         graph1 = Graph(graph_src)
         self.add(*graph1.vertices)
 
         self.play(
-            node_a.connect_bulk(out_neighbours=[node_b, node_c], weights=[1, 3]),
-            node_b.connect_bulk(out_neighbours=[node_c], weights=[1]),
+            graph_src[0].connect_bulk(
+                out_neighbours=[graph_src[1], graph_src[2]], weights=[1, 3]
+            ),
+            graph_src[1].connect_bulk(out_neighbours=[graph_src[2]], weights=[1]),
         )
         self.play(
-            node_a.select(), *[out_edge.select() for out_edge in node_a.out_edges]
+            graph_src[0].select(),
+            *[out_edge.select() for out_edge in graph_src[0].out_edges],
         )
         self.wait()
-        self.play(node_a.out_edges[0].traverse())
+        self.play(graph_src[0].out_edges[0].traverse())
         self.wait()
 
 
