@@ -1,6 +1,7 @@
 from manim import *
 from typing import Tuple, Optional
 import logging
+import random
 
 # Create a logger
 logger = logging.getLogger("manim_logger")
@@ -20,6 +21,23 @@ file_handler.setFormatter(formatter)  # Assign the formatter to the handler
 logger.addHandler(file_handler)
 
 
+class FlickerOut(Animation):
+    def __init__(self, mobject: Mobject, remover=True, **kwargs):
+        # self.original = mobject.copy()  # TODO: is this really necessary?
+        self.period_checkpoint = random.uniform(0.1, 0.3)
+        self.flipflop = True
+        super().__init__(mobject, remover=remover, **kwargs)
+
+    def interpolate_mobject(self, alpha: float) -> None:
+        actual_alpha = self.rate_func(alpha)
+
+        if actual_alpha > self.period_checkpoint:
+            self.flipflop = not self.flipflop
+            self.period_checkpoint += random.uniform(0.1, 0.3)
+
+        self.mobject.set_opacity((min(actual_alpha * 1.5, 1)) if self.flipflop else 0)
+
+
 class Node(VMobject):
     def __init__(
         self,
@@ -29,15 +47,26 @@ class Node(VMobject):
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.circle = Circle(radius=radius, stroke_color=BLUE)
+        self.circle = Circle(
+            radius=radius,
+            fill_color=BLACK,
+            fill_opacity=1,
+            stroke_color=BLUE,
+            z_index=5,
+        )
         self.circle.move_to([*pos, 0])
 
-        self.label = Text(name, font="Arial").scale(0.5)
+        self.label = Text(name, font="Arial", color=WHITE, z_index=999).scale(0.5)
         self.label.move_to(self.circle.get_center())
 
         self.next: List["Node"] = []
 
-        self.add(self.circle, self.label)
+        # self.add(self.label, self.circle)
+        self.add(self.circle)
+        self.add(self.label)
+
+    def create(self) -> Animation:
+        return Create(self)
 
     def connect_bulk(
         self, out_neighbours: List["Node"], weights: List[int]
@@ -72,7 +101,7 @@ class Node(VMobject):
         )
 
     def select(self) -> Animation:
-        self.circle.set_color(YELLOW)
+        self.circle.set_stroke_color(YELLOW)
         return Flash(self, flash_radius=0.5)
 
 
@@ -87,7 +116,7 @@ class Graph:
     def create_vertices(self) -> AnimationGroup:
         animations = []
         for vertex in self.vertices:
-            animations.append(Create(vertex))
+            animations.append(vertex.create())
         return AnimationGroup(*animations)
 
 
@@ -113,6 +142,10 @@ class Dijkstra(Scene):
             node_b.connect_bulk(out_neighbours=[node_c], weights=[1]),
         )
         self.play(node_a.select())
+
+        self.play(*[FlickerOut(node) for node in graph1.vertices])
+
+        self.wait(duration=2)
 
 
 if __name__ == "__main__":
