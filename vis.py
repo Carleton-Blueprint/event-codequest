@@ -1,5 +1,6 @@
 from manim import *
 from typing import Tuple, Optional
+import math
 import logging
 import random
 
@@ -57,10 +58,15 @@ class Edge(VMobject):
 
         self.add(self.line, self.weight_label)
 
-    def traverse(self) -> Animation:
+    def traverse(self) -> AnimationGroup:
         temp_copy = self.copy()
         temp_copy.set_stroke(color=YELLOW)
-        return ShowPassingFlash(temp_copy, time_width=1, run_time=2)
+        # temp_node_copy = self.dest_node.copy()
+        # temp_node_copy.set_stroke(color=YELLOW)
+        return AnimationGroup(
+            ShowPassingFlash(temp_copy, time_width=1, run_time=1),
+            # ShowPassingFlash(temp_node_copy, time_width=1, run_time=1),
+        )
 
     def select(self) -> Animation:
         self.selected_overlay = self.copy()
@@ -87,7 +93,8 @@ class Node(VMobject):
             fill_opacity=1,
             stroke_color=BLUE,
         )
-        self.label = Text(name, font="Arial", color=RED).scale(0.5)
+        self.label = MathTex(r"\infty").scale(0.5)
+        self.cost = math.inf
         self.out_edges: List["Edge"] = []
 
         self.add(self.circle, self.label)
@@ -108,6 +115,28 @@ class Node(VMobject):
         self.circle.set_stroke_color(RED)
         return Flash(self, color=RED, flash_radius=0.5)
 
+    def update_cost(self, cost: int) -> AnimationGroup:
+        if cost < self.cost:
+            self.label.become(
+                MathTex(r"\infty" if math.isinf(cost) else cost)
+                .scale(0.5)
+                .move_to(self.get_center())
+            )
+
+            return AnimationGroup(
+                Indicate(self, color=YELLOW),
+                FadeOut(
+                    Text("Cost Reduced", color=YELLOW)
+                    .scale(0.5)
+                    .move_to(self.get_center() + 0.5 * UP)
+                ),
+            )
+        return FadeOut(
+            Text("No Change", color=WHITE)
+            .scale(0.5)
+            .move_to(self.get_center() + 0.5 * UP)
+        )
+
 
 class Graph:
     def __init__(self, src: List["Node"]):
@@ -120,16 +149,18 @@ class Graph:
 
 class Dijkstra(Scene):
     def construct(self):
+        num_plane = NumberPlane().add_coordinates()
+        self.add(num_plane)
 
         graph_src = [
-            Node("A", radius=0.3, pos=(-3, -2)),
-            Node("B", radius=0.3, pos=(3, -3.5)),
+            Node("A", radius=0.3, pos=(-2, -3)),
+            Node("B", radius=0.3, pos=(-5, 2)),
             Node("C", radius=0.3, pos=(0, 0)),
-            Node("D", radius=0.3, pos=(3, 3)),
-            Node("E", radius=0.3, pos=(-3, 3)),
-            Node("F", radius=0.3, pos=(5, -2)),
-            Node("G", radius=0.3, pos=(4, 3)),
-            Node("H", radius=0.3, pos=(6, 0)),
+            Node("D", radius=0.3, pos=(1, 2)),
+            Node("E", radius=0.3, pos=(2, -1)),
+            Node("F", radius=0.3, pos=(4, 2)),
+            Node("G", radius=0.3, pos=(6, -3)),
+            Node("H", radius=0.3, pos=(4, 0)),
         ]
 
         graph1 = Graph(graph_src)
@@ -145,8 +176,12 @@ class Dijkstra(Scene):
             graph_src[0].select(),
             *[out_edge.select() for out_edge in graph_src[0].out_edges],
         )
-        self.wait()
-        self.play(graph_src[0].out_edges[0].traverse())
+
+        node_of_interest = graph_src[0]
+        edge_of_interest = node_of_interest.out_edges[0]
+        self.play(
+            edge_of_interest.traverse(), edge_of_interest.dest_node.update_cost(1)
+        )
         self.wait()
 
 
