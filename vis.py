@@ -55,6 +55,7 @@ class Edge(VMobject):
             color=WHITE,
         ).scale(0.5)
         self.weight_label.move_to(self.line.get_center() + 0.3 * UP)
+        self.visited_overlay = None
 
         self.add(self.line, self.weight_label)
 
@@ -68,10 +69,10 @@ class Edge(VMobject):
             # ShowPassingFlash(temp_node_copy, time_width=1, run_time=1),
         )
 
-    def select(self) -> Animation:
-        self.selected_overlay = self.copy()
-        self.selected_overlay.set_stroke(color=RED)
-        return Create(self.selected_overlay, run_time=2)
+    def visit(self) -> Animation:
+        self.visited_overlay = self.copy()
+        self.visited_overlay.set_stroke(color=RED)
+        return Create(self.visited_overlay, run_time=2)
 
     def deselect(self) -> Animation:
         return FlickerOut(self.copy, run_time=2)
@@ -96,6 +97,7 @@ class Node(VMobject):
         self.label = MathTex(r"\infty").scale(0.5)
         self.cost = math.inf
         self.out_edges: List["Edge"] = []
+        self.is_visisted = False
 
         self.add(self.circle, self.label)
         self.move_to([*pos, 0])
@@ -111,8 +113,9 @@ class Node(VMobject):
             *[Create(edge) for edge in self.out_edges], run_time=1, lag_ratio=0.25
         )
 
-    def select(self) -> Animation:
+    def visit(self) -> Animation:
         self.circle.set_stroke_color(RED)
+        self.is_visited = True
         return Flash(self, color=RED, flash_radius=0.5)
 
     def update_cost(self, cost: int) -> AnimationGroup:
@@ -123,8 +126,12 @@ class Node(VMobject):
                 .move_to(self.get_center())
             )
 
+            temp_copy = self.circle.copy()
+            temp_copy.set_stroke(YELLOW)
+            temp_copy.set_z_index(3)
+
             return AnimationGroup(
-                Indicate(self, color=YELLOW),
+                ShowPassingFlash(temp_copy, time_width=1),
                 FadeOut(
                     Text("Cost Reduced", color=YELLOW)
                     .scale(0.5)
@@ -147,7 +154,7 @@ class Graph:
         self.vertices.extend(vertices)
 
 
-class Dijkstra(Scene):
+class Main(Scene):
     def construct(self):
         num_plane = NumberPlane().add_coordinates()
         self.add(num_plane)
@@ -173,18 +180,17 @@ class Dijkstra(Scene):
             graph_src[1].connect_bulk(out_neighbours=[graph_src[2]], weights=[1]),
         )
         self.play(
-            graph_src[0].select(),
-            *[out_edge.select() for out_edge in graph_src[0].out_edges],
+            graph_src[0].visit(),
+            *[out_edge.visit() for out_edge in graph_src[0].out_edges],
         )
 
         node_of_interest = graph_src[0]
-        edge_of_interest = node_of_interest.out_edges[0]
-        self.play(
-            edge_of_interest.traverse(), edge_of_interest.dest_node.update_cost(1)
-        )
+        for edge in node_of_interest.out_edges:
+            self.play(edge.traverse())
+            self.play(edge.dest_node.update_cost(1))
         self.wait()
 
 
 if __name__ == "__main__":
-    scene = Dijkstra()
+    scene = Main()
     scene.render()
