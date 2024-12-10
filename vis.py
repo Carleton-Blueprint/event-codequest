@@ -23,7 +23,6 @@ logger.addHandler(file_handler)
 
 class FlickerOut(Animation):
     def __init__(self, mobject: Mobject, remover=True, **kwargs):
-        # self.original = mobject.copy()  # TODO: is this really necessary?
         self.period_checkpoint = random.uniform(0.1, 0.3)
         self.flipflop = True
         super().__init__(mobject, remover=remover, **kwargs)
@@ -38,6 +37,40 @@ class FlickerOut(Animation):
         self.mobject.set_opacity((min(actual_alpha * 1.5, 1)) if self.flipflop else 0)
 
 
+class Edge(VMobject):
+    def __init__(self, weight: int, src_node: "Node", dest_node: "Node", **kwargs):
+        super().__init__(**kwargs)
+
+        self.weight = weight
+        self.src_node = src_node
+        self.dest_node = dest_node
+        self.line = Line(
+            src_node.get_center(),
+            dest_node.get_center(),
+        )
+        self.weight_label = Text(
+            str(weight),
+            font="Arial",
+            color=WHITE,
+        ).scale(0.5)
+        self.weight_label.move_to(self.line.get_center() + 0.3 * UP)
+
+        self.add(self.line, self.weight_label)
+
+    def traverse(self) -> Animation:
+        temp_copy = self.copy()
+        temp_copy.set_stroke(color=YELLOW)
+        return ShowPassingFlash(temp_copy, time_width=1, run_time=2)
+
+    def select(self) -> Animation:
+        self.selected_overlay = self.copy()
+        self.selected_overlay.set_stroke(color=RED)
+        return Create(self.selected_overlay, run_time=2)
+
+    def deselect(self) -> Animation:
+        return FlickerOut(self.copy, run_time=2)
+
+
 class Node(VMobject):
     def __init__(
         self,
@@ -47,77 +80,42 @@ class Node(VMobject):
         **kwargs,
     ):
         super().__init__(**kwargs)
+
         self.circle = Circle(
             radius=radius,
             fill_color=BLACK,
             fill_opacity=1,
             stroke_color=BLUE,
-            z_index=5,
         )
-        self.circle.move_to([*pos, 0])
+        self.label = Text(name, font="Arial", color=RED).scale(0.5)
+        self.out_edges: List["Edge"] = []
 
-        self.label = Text(name, font="Arial", color=WHITE, z_index=999).scale(0.5)
-        self.label.move_to(self.circle.get_center())
-
-        self.next: List["Node"] = []
-
-        # self.add(self.label, self.circle)
-        self.add(self.circle)
-        self.add(self.label)
-
-    def create(self) -> Animation:
-        return Create(self)
+        self.add(self.circle, self.label)
+        self.move_to([*pos, 0])
+        self.z_index = 1
 
     def connect_bulk(
         self, out_neighbours: List["Node"], weights: List[int]
     ) -> Animation:
-        out_edges = []
         for node, weight in zip(out_neighbours, weights):
-            if node not in self.next:
-                self.next.append(node)
-
-                weighted_line = VGroup()  # TODO: Change this to a custom VMobject
-                weighted_line.add(
-                    Line(
-                        self.get_center(),
-                        node.get_center(),
-                        z_index=0,
-                    )
-                )
-
-                weight_label = Text(
-                    str(weight),
-                    font="Arial",
-                    color=WHITE,
-                    z_index=0,
-                ).scale(0.5)
-                weight_label.move_to(weighted_line.get_center() + 0.3 * UP)
-                weighted_line.add(weight_label)
-
-                out_edges.append(weighted_line)
+            self.out_edges.append(Edge(weight, self, node))
 
         return LaggedStart(
-            *[Create(edge) for edge in out_edges], run_time=1, lag_ratio=0.25
+            *[Create(edge) for edge in self.out_edges], run_time=1, lag_ratio=0.25
         )
 
     def select(self) -> Animation:
-        self.circle.set_stroke_color(YELLOW)
-        return Flash(self, flash_radius=0.5)
+        self.circle.set_stroke_color(RED)
+        return Flash(self, color=RED, flash_radius=0.5)
 
 
 class Graph:
-    def __init__(self, src: List[Node]):
-        self.vertices: List[Node] = []
+    def __init__(self, src: List["Node"]):
+        self.vertices: List["Node"] = []
         self.add_vertices(src)
 
     def add_vertices(self, vertices):
         self.vertices.extend(vertices)
-
-    def create_vertices(self) -> AnimationGroup:
-        animations = []
-        for vertex in self.vertices:
-            animations.append(vertex.create())
-        return AnimationGroup(*animations)
 
 
 class Dijkstra(Scene):
@@ -134,35 +132,20 @@ class Dijkstra(Scene):
         ]
 
         graph1 = Graph(graph_src)
-
-        self.play(graph1.create_vertices())
+        self.add(*graph1.vertices)
 
         self.play(
             node_a.connect_bulk(out_neighbours=[node_b, node_c], weights=[1, 3]),
             node_b.connect_bulk(out_neighbours=[node_c], weights=[1]),
         )
-        self.play(node_a.select())
-
-        self.play(*[FlickerOut(node) for node in graph1.vertices])
-
-        self.wait(duration=2)
+        self.play(
+            node_a.select(), *[out_edge.select() for out_edge in node_a.out_edges]
+        )
+        self.wait()
+        self.play(node_a.out_edges[0].traverse())
+        self.wait()
 
 
 if __name__ == "__main__":
     scene = Dijkstra()
     scene.render()
-
-    # open_media_file(scene.renderer.file_writer.movie_file_path)
-
-    # values = []
-
-    # start = 500
-    # curr_val = start
-
-    # while curr_val > 100:
-    #     values.append(curr_val)
-    #     curr_val = round(
-    #         curr_val * random.uniform(0.8, 1)
-    #     )  # might use perlin noise here
-
-    # print(values)
