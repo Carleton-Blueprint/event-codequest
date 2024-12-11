@@ -94,7 +94,8 @@ class Node(VMobject):
             fill_opacity=1,
             stroke_color=BLUE,
         )
-        self.label = MathTex(r"\infty").scale(0.5)
+        # self.label = MathTex(r"\infty").scale(0.5)
+        self.label = MathTex(name).scale(0.5)
         self.cost = math.inf
         self.out_edges: List["Edge"] = []
         self.is_visisted = False
@@ -121,7 +122,8 @@ class Node(VMobject):
     def update_cost(self, cost: int) -> AnimationGroup:
         if cost < self.cost:
             self.label.become(
-                MathTex(r"\infty" if math.isinf(cost) else cost)
+                # MathTex(r"\infty" if math.isinf(cost) else cost)
+                MathTex(self.name if math.isinf(cost) else cost)
                 .scale(0.5)
                 .move_to(self.get_center())
             )
@@ -177,8 +179,26 @@ class Main(Scene):
             graph_src[0].connect_bulk(
                 out_neighbours=[graph_src[1], graph_src[2]], weights=[1, 3]
             ),
-            graph_src[1].connect_bulk(out_neighbours=[graph_src[2]], weights=[1]),
+            graph_src[1].connect_bulk(
+                out_neighbours=[graph_src[4], graph_src[5], graph_src[7]],
+                weights=[4, 8, 3],
+            ),
+            graph_src[2].connect_bulk(out_neighbours=[graph_src[3]], weights=[1]),
+            graph_src[3].connect_bulk(out_neighbours=[graph_src[4]], weights=[9]),
+            graph_src[4].connect_bulk(out_neighbours=[graph_src[5]], weights=[2]),
+            graph_src[5].connect_bulk(out_neighbours=[graph_src[6]], weights=[5]),
+            graph_src[6].connect_bulk(out_neighbours=[graph_src[7]], weights=[7]),
+            graph_src[7].connect_bulk(out_neighbours=[graph_src[4]], weights=[2]),
         )
+
+        # starting_vertex = graph_src[0]
+        # starting_vertex.visit()
+
+        # for node in graph_src:
+        #     for edge in node.out_edges:
+        #         if edge.dest_node.is_visited:
+        #             continue
+
         self.play(
             graph_src[0].visit(),
             *[out_edge.visit() for out_edge in graph_src[0].out_edges],
