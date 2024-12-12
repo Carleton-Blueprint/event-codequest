@@ -22,6 +22,32 @@ file_handler.setFormatter(formatter)  # Assign the formatter to the handler
 logger.addHandler(file_handler)
 
 
+class ReverseCreate(ShowPartial):
+    """
+    `Create` but in reverse. Different from `Uncreate`.
+    Instead of adding to the VMobject, we are taking out from the VMobject.
+    """
+
+    def __init__(
+        self,
+        mobject: VMobject,
+        lag_ratio: float = 1.0,
+        remover: bool = True,
+        reverse_rate_function: bool = True,
+        **kwargs,
+    ) -> None:
+        super().__init__(
+            mobject,
+            lag_ratio=lag_ratio,
+            remover=remover,
+            reverse_rate_function=reverse_rate_function,
+            **kwargs,
+        )
+
+    def _get_bounds(self, alpha: float) -> tuple[int, float]:
+        return (1 - alpha, 1)
+
+
 class FlickerOut(Animation):
     def __init__(self, mobject: Mobject, remover=True, **kwargs):
         self.period_checkpoint = random.uniform(0.1, 0.3)
@@ -58,6 +84,7 @@ class Edge(VMobject):
             color=WHITE,
         ).scale(0.5)
         self.weight_label.move_to(self.line.get_center() + 0.3 * UP)
+        self.is_part_of_tree = False
 
         self.add(self.line, self.weight_label)
 
@@ -83,11 +110,14 @@ class Edge(VMobject):
 
         return self.nodes[0] if not self.nodes[0].is_visited else self.nodes[1]
 
-    def _validate_src_or_dest_node(self, src_node, dest_node):
+    def _validate_src_or_dest_node(
+        self, src_node, dest_node, allow_none: Optional[bool] = False
+    ):
         """
         The specified node must be in the edge, and only one of them can be specified at a time.
+        If `allow_none` is True (default False), allow both nodes to be None.
         """
-        if not src_node and not dest_node:
+        if not allow_none and not src_node and not dest_node:
             raise ValueError(
                 "At least one of src_node and dest_node must be specified."
             )
@@ -130,27 +160,39 @@ class Edge(VMobject):
         src_node: Optional["Node"] = None,
         dest_node: Optional["Node"] = None,
         color: Optional[ParsableManimColor] = RED,
-    ) -> Animation:
+    ) -> AnimationGroup:
         """
         Propagate the new color over the existing edge.
-        Animation starts from the specified source node if src_node is specified.
-        Otherwise, starts
+        - Animation starts from the specified source node if src_node is specified.
+        - Otherwise, ends at the specified destination node if dest_node is specified.
+        - If none of the nodes are specified, the edge will fade in all at once.
         """
-        self._validate_src_or_dest_node(src_node, dest_node)
-        other_node = self.get_other_node(src_node or dest_node)
+        self._validate_src_or_dest_node(src_node, dest_node, allow_none=True)
 
-        if src_node:
-            temp_line = Line(src_node.get_center(), other_node.get_center())
-        elif dest_node:
-            temp_line = Line(other_node.get_center(), dest_node.get_center())
+        # Fade In whole
+        if src_node is None and dest_node is None:
+            return AnimationGroup(self.line.animate.set_color(color=color))
+
+        # Propagate from src to dest
         else:
-            raise ValueError("Internal server error!")
+            other_node = self.get_other_node(src_node or dest_node)
 
-        temp_line.set_stroke(color=color)
-        return Create(temp_line, run_time=2)
+            if src_node:
+                new_line = Line(src_node.get_center(), other_node.get_center())
+            elif dest_node:
+                new_line = Line(other_node.get_center(), dest_node.get_center())
+            else:
+                raise ValueError("Internal server error!")
 
-    def deselect(self) -> Animation:
-        return FlickerOut(self.copy, run_time=2)
+            new_line.set_stroke(color=color)
+
+            old_line = self.line
+            self.line = new_line
+
+            return AnimationGroup(ReverseCreate(old_line), Create(new_line))
+
+    # def deselect(self) -> Animation:
+    #     return FlickerOut(self.copy, run_time=2)
 
 
 class Node(VMobject):
@@ -212,11 +254,12 @@ class Node(VMobject):
                 .scale(0.5)
                 .move_to(self.get_center() + 0.5 * UP)
             ),
-            Flash(self, color=RED, flash_radius=0.5),
+            Flash(self, color=PURPLE, flash_radius=0.5),
             *[out_edge.create_overlay(src_node=self) for out_edge in self.out_edges],
         ]
 
         if src_edge:
+            src_edge.is_part_of_tree = True
             anims.append(src_edge.create_overlay(dest_node=self, color=PURPLE))
 
         return AnimationGroup(*anims)
@@ -325,7 +368,17 @@ class Main(Scene):
             self.play(
                 new_node_to_visit.visit(src_edge=min_dest_edge),
             )
-            self.wait(2)
+
+            # Dull irrelevant edges
+            irrev_edges = [
+                edge.create_overlay(color=GRAY)
+                for edge in edges
+                if all(node.is_visited for node in edge.nodes)
+                and not edge.is_part_of_tree
+            ]
+            if len(irrev_edges) > 0:
+                self.play(*irrev_edges)
+            self.wait()
 
 
 if __name__ == "__main__":
