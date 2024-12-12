@@ -204,7 +204,7 @@ class Node(VMobject):
         if src_edge and self not in src_edge.nodes:
             raise ValueError("`src_edge` must be connected to the node.")
 
-        self.circle.set_stroke_color(RED)
+        self.circle.set_stroke_color(PURPLE)
         self.is_visited = True
         anims = [
             FadeOut(
@@ -217,7 +217,7 @@ class Node(VMobject):
         ]
 
         if src_edge:
-            anims.append(src_edge.create_overlay(dest_node=self))
+            anims.append(src_edge.create_overlay(dest_node=self, color=PURPLE))
 
         return AnimationGroup(*anims)
 
@@ -323,8 +323,7 @@ class Main(Scene):
             self.wait()
             new_node_to_visit = min_dest_edge.get_reachable_unexplored_node()
             self.play(
-                new_node_to_visit.visit(),
-                min_dest_edge.traverse(dest_node=new_node_to_visit, color=WHITE),
+                new_node_to_visit.visit(src_edge=min_dest_edge),
             )
             self.wait(2)
 
