@@ -58,7 +58,6 @@ class Edge(VMobject):
             color=WHITE,
         ).scale(0.5)
         self.weight_label.move_to(self.line.get_center() + 0.3 * UP)
-        self.visited_overlay = None
 
         self.add(self.line, self.weight_label)
 
@@ -84,17 +83,9 @@ class Edge(VMobject):
 
         return self.nodes[0] if not self.nodes[0].is_visited else self.nodes[1]
 
-    def traverse(
-        self,
-        src_node: Optional["Node"] = None,
-        dest_node: Optional["Node"] = None,
-        color: Optional[ParsableManimColor] = YELLOW,
-    ) -> AnimationGroup:
+    def _validate_src_or_dest_node(self, src_node, dest_node):
         """
-        Traverse the edge. This animation is ephemeral and does not change the state of the edge.
-        Specify src_node to indicate which node the traversal is coming from.
-        Specify dest_node to indicate which node the traversal is going to.
-        Both of these nodes must be in the edge, and only one of them can be specified at a time.
+        The specified node must be in the edge, and only one of them can be specified at a time.
         """
         if not src_node and not dest_node:
             raise ValueError(
@@ -110,6 +101,18 @@ class Edge(VMobject):
         if src_node and dest_node:
             raise ValueError("Only one of src_node and dest_node can be specified.")
 
+    def traverse(
+        self,
+        src_node: Optional["Node"] = None,
+        dest_node: Optional["Node"] = None,
+        color: Optional[ParsableManimColor] = YELLOW,
+    ) -> Animation:
+        """
+        Traverse the edge. This animation is ephemeral and does not change the state of the edge.
+        Specify src_node to indicate which node the traversal is coming from.
+        Specify dest_node to indicate which node the traversal is going to.
+        """
+        self._validate_src_or_dest_node(src_node, dest_node)
         other_node = self.get_other_node(src_node or dest_node)
 
         if src_node:
@@ -120,14 +123,31 @@ class Edge(VMobject):
             raise ValueError("Internal server error!")
 
         temp_line.set_stroke(color=color)
-        return AnimationGroup(
-            ShowPassingFlash(temp_line, time_width=1, run_time=1),
-        )
+        return ShowPassingFlash(temp_line, time_width=1, run_time=1)
 
-    def visit(self) -> Animation:
-        self.visited_overlay = self.copy()
-        self.visited_overlay.set_stroke(color=RED)
-        return Create(self.visited_overlay, run_time=2)
+    def create_overlay(
+        self,
+        src_node: Optional["Node"] = None,
+        dest_node: Optional["Node"] = None,
+        color: Optional[ParsableManimColor] = RED,
+    ) -> Animation:
+        """
+        Propagate the new color over the existing edge.
+        Animation starts from the specified source node if src_node is specified.
+        Otherwise, starts
+        """
+        self._validate_src_or_dest_node(src_node, dest_node)
+        other_node = self.get_other_node(src_node or dest_node)
+
+        if src_node:
+            temp_line = Line(src_node.get_center(), other_node.get_center())
+        elif dest_node:
+            temp_line = Line(other_node.get_center(), dest_node.get_center())
+        else:
+            raise ValueError("Internal server error!")
+
+        temp_line.set_stroke(color=color)
+        return Create(temp_line, run_time=2)
 
     def deselect(self) -> Animation:
         return FlickerOut(self.copy, run_time=2)
@@ -175,17 +195,31 @@ class Node(VMobject):
             *[Create(edge) for edge in self.out_edges], run_time=1, lag_ratio=0.25
         )
 
-    def visit(self) -> AnimationGroup:
+    def visit(self, src_edge: Optional["Edge"] = None) -> AnimationGroup:
+        """
+        Marks the node as visited.
+        Also highlights all the adjacent edges.
+        If `src_edge` is specified, it will be highlighted in a different color.
+        """
+        if src_edge and self not in src_edge.nodes:
+            raise ValueError("`src_edge` must be connected to the node.")
+
         self.circle.set_stroke_color(RED)
         self.is_visited = True
-        return AnimationGroup(
+        anims = [
             FadeOut(
                 Text("Selected", color=WHITE)
                 .scale(0.5)
                 .move_to(self.get_center() + 0.5 * UP)
             ),
             Flash(self, color=RED, flash_radius=0.5),
-        )
+            *[out_edge.create_overlay(src_node=self) for out_edge in self.out_edges],
+        ]
+
+        if src_edge:
+            anims.append(src_edge.create_overlay(dest_node=self))
+
+        return AnimationGroup(*anims)
 
     def update_cost(self, cost: int) -> AnimationGroup:
         if cost < self.cost:
@@ -238,11 +272,13 @@ class Main(Scene):
                 weights=[1, 3, 6],
             ),
             graph_src[1].connect_bulk(
-                out_neighbours=[graph_src[2], graph_src[5]],
+                out_neighbours=[graph_src[2], graph_src[3]],
                 weights=[4, 8],
             ),
             graph_src[2].connect_bulk(out_neighbours=[graph_src[3]], weights=[1]),
-            graph_src[3].connect_bulk(out_neighbours=[graph_src[4]], weights=[9]),
+            graph_src[3].connect_bulk(
+                out_neighbours=[graph_src[4], graph_src[5]], weights=[9, 4]
+            ),
             graph_src[4].connect_bulk(out_neighbours=[graph_src[5]], weights=[2]),
             graph_src[5].connect_bulk(out_neighbours=[graph_src[6]], weights=[5]),
             graph_src[6].connect_bulk(out_neighbours=[graph_src[7]], weights=[7]),
@@ -255,35 +291,42 @@ class Main(Scene):
         self.wait(0.5)
         self.play(
             starting_vertex.visit(),
-            *[out_edge.visit() for out_edge in graph_src[0].out_edges],
         )
 
         edges: List["Edge"] = []
         for node in graph_src:
             edges.extend(node.out_edges)
+        edges.sort(
+            key=lambda edge: -edge.line.get_center()[1]
+        )  # sort by y-coordinate (height)
 
-        min_dest_edge = None
-        min_dest_weight = math.inf
+        while True:
+            if all(node.is_visited for node in graph_src):
+                break
 
-        for edge in edges:
-            reachable_unexplored_node = edge.get_reachable_unexplored_node()
-            if reachable_unexplored_node:
-                src_node = edge.get_other_node(reachable_unexplored_node)
-                new_cost = src_node.cost + edge.weight
-                self.play(
-                    edge.traverse(dest_node=reachable_unexplored_node),
-                    reachable_unexplored_node.update_cost(new_cost),
-                )
-                if new_cost < min_dest_weight:
-                    min_dest_weight = new_cost
-                    min_dest_edge = edge
+            min_dest_edge = None
+            min_dest_weight = math.inf
 
-        self.wait()
-        new_node_to_visit = min_dest_edge.get_reachable_unexplored_node()
-        self.play(
-            new_node_to_visit.visit(),
-            min_dest_edge.traverse(dest_node=new_node_to_visit, color=WHITE),
-        )
+            for edge in edges:
+                reachable_unexplored_node = edge.get_reachable_unexplored_node()
+                if reachable_unexplored_node:
+                    src_node = edge.get_other_node(reachable_unexplored_node)
+                    new_cost = src_node.cost + edge.weight
+                    self.play(
+                        edge.traverse(dest_node=reachable_unexplored_node),
+                        reachable_unexplored_node.update_cost(new_cost),
+                    )
+                    if new_cost < min_dest_weight:
+                        min_dest_weight = new_cost
+                        min_dest_edge = edge
+
+            self.wait()
+            new_node_to_visit = min_dest_edge.get_reachable_unexplored_node()
+            self.play(
+                new_node_to_visit.visit(),
+                min_dest_edge.traverse(dest_node=new_node_to_visit, color=WHITE),
+            )
+            self.wait(2)
 
 
 if __name__ == "__main__":
