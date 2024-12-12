@@ -94,11 +94,11 @@ class Node(VMobject):
             fill_opacity=1,
             stroke_color=BLUE,
         )
-        # self.label = MathTex(r"\infty").scale(0.5)
-        self.label = MathTex(name).scale(0.5)
+        self.label = MathTex(r"\infty").scale(0.5)
+        # self.label = MathTex(name).scale(0.5)
         self.cost = math.inf
         self.out_edges: List["Edge"] = []
-        self.is_visisted = False
+        self.is_visited = False
 
         self.add(self.circle, self.label)
         self.move_to([*pos, 0])
@@ -114,18 +114,25 @@ class Node(VMobject):
             *[Create(edge) for edge in self.out_edges], run_time=1, lag_ratio=0.25
         )
 
-    def visit(self) -> Animation:
+    def visit(self) -> AnimationGroup:
         self.circle.set_stroke_color(RED)
         self.is_visited = True
-        return Flash(self, color=RED, flash_radius=0.5)
+        return AnimationGroup(
+            FadeOut(
+                Text("Selected", color=YELLOW)
+                .scale(0.5)
+                .move_to(self.get_center() + 0.5 * UP)
+            ),
+            Flash(self, color=RED, flash_radius=0.5),
+        )
 
     def update_cost(self, cost: int) -> AnimationGroup:
         if cost < self.cost:
+            self.cost = cost
             self.label.become(
-                # MathTex(r"\infty" if math.isinf(cost) else cost)
-                MathTex(self.name if math.isinf(cost) else cost)
-                .scale(0.5)
-                .move_to(self.get_center())
+                MathTex(r"\infty" if math.isinf(cost) else cost)
+                # MathTex(self.name if math.isinf(cost) else cost)
+                .scale(0.5).move_to(self.get_center())
             )
 
             temp_copy = self.circle.copy()
@@ -147,19 +154,10 @@ class Node(VMobject):
         )
 
 
-class Graph:
-    def __init__(self, src: List["Node"]):
-        self.vertices: List["Node"] = []
-        self.add_vertices(src)
-
-    def add_vertices(self, vertices):
-        self.vertices.extend(vertices)
-
-
 class Main(Scene):
     def construct(self):
-        num_plane = NumberPlane().add_coordinates()
-        self.add(num_plane)
+        # num_plane = NumberPlane().add_coordinates()
+        # self.add(num_plane)
 
         graph_src = [
             Node("A", radius=0.3, pos=(-2, -3)),
@@ -171,17 +169,16 @@ class Main(Scene):
             Node("G", radius=0.3, pos=(6, -3)),
             Node("H", radius=0.3, pos=(4, 0)),
         ]
-
-        graph1 = Graph(graph_src)
-        self.add(*graph1.vertices)
+        self.add(*graph_src)
 
         self.play(
             graph_src[0].connect_bulk(
-                out_neighbours=[graph_src[1], graph_src[2]], weights=[1, 3]
+                out_neighbours=[graph_src[1], graph_src[2], graph_src[6]],
+                weights=[1, 3, 6],
             ),
             graph_src[1].connect_bulk(
-                out_neighbours=[graph_src[4], graph_src[5], graph_src[7]],
-                weights=[4, 8, 3],
+                out_neighbours=[graph_src[2], graph_src[5]],
+                weights=[4, 8],
             ),
             graph_src[2].connect_bulk(out_neighbours=[graph_src[3]], weights=[1]),
             graph_src[3].connect_bulk(out_neighbours=[graph_src[4]], weights=[9]),
@@ -191,24 +188,47 @@ class Main(Scene):
             graph_src[7].connect_bulk(out_neighbours=[graph_src[4]], weights=[2]),
         )
 
-        # starting_vertex = graph_src[0]
-        # starting_vertex.visit()
+        starting_vertex = graph_src[0]
 
-        # for node in graph_src:
-        #     for edge in node.out_edges:
-        #         if edge.dest_node.is_visited:
-        #             continue
-
+        self.play(starting_vertex.update_cost(0))
+        self.wait(0.5)
         self.play(
-            graph_src[0].visit(),
+            starting_vertex.visit(),
             *[out_edge.visit() for out_edge in graph_src[0].out_edges],
         )
 
-        node_of_interest = graph_src[0]
-        for edge in node_of_interest.out_edges:
-            self.play(edge.traverse())
-            self.play(edge.dest_node.update_cost(1))
-        self.wait()
+        edges = []
+        for node in graph_src:
+            edges.extend(node.out_edges)
+
+        min_dest_edge = None
+        min_dest_weight = math.inf
+
+        for edge in edges:
+            if edge.src_node.is_visited ^ edge.dest_node.is_visited:
+                if not edge.src_node.is_visited:
+                    new_cost = edge.dest_node.cost + edge.weight
+                    self.play(edge.traverse(), edge.src_node.update_cost(new_cost))
+                    if new_cost < min_dest_weight:
+                        min_dest_weight = new_cost
+                        min_dest_edge = edge
+                elif not edge.dest_node.is_visited:
+                    new_cost = edge.src_node.cost + edge.weight
+                    self.play(edge.traverse(), edge.dest_node.update_cost(new_cost))
+                    if new_cost < min_dest_weight:
+                        min_dest_weight = new_cost
+                        min_dest_edge = edge
+
+        if min_dest_edge.src_node.is_visited:
+            min_dest_edge.dest_node.visit()
+        else:
+            min_dest_edge.src_node.visit()
+
+    # node_of_interest = graph_src[0]
+    # for edge in node_of_interest.out_edges:
+    #     self.play(edge.traverse())
+    #     self.play(edge.dest_node.update_cost(1))
+    # self.wait()
 
 
 if __name__ == "__main__":
