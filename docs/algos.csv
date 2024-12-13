@@ -1,0 +1,5 @@
+Code,Name,Algorithms
+COMP 1805,Discrete Structures I,"Breadth First Search (BFS), Depth First Search (DFS)"
+COMP 2402,Abstract Data Types and Algorithms,"Heapify (Max Heap, Min Heap), Array Mutation (Growing/Shrinking), Traversing Trees/Heaps, Sorting"
+COMP 2804,Discrete Structures II,"[Counting 00-free bitstrings](https://youtu.be/AjGhGytU7R8), Counting how many ways to group n items into 2 groups"
+COMP 3804,Design and Analysis of Algorithms I,"Kruskal's/Prim's Minimum Spanning Tree (MST), Dijsktra's Algorithm (Shortest Path), Longest Increasing Subsequence (LIS)"
