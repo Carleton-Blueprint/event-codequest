@@ -78,13 +78,16 @@ class Edge(VMobject):
             nodes[0].get_center(),
             nodes[1].get_center(),
         )
+        self.is_created = False  # Only used for initial creation (to not `Create()` duplicates on the graph). Never used again afterwards.
         self.weight_label = Text(
             str(weight),
             font="Arial",
             color=WHITE,
         ).scale(0.5)
         self.weight_label.move_to(self.line.get_center() + 0.3 * UP)
-        self.is_part_of_tree = False
+        self.is_part_of_tree = (
+            False  # Determine if edge is purple (solified as part of the final tree)
+        )
 
         self.add(self.line, self.weight_label)
 
@@ -155,7 +158,11 @@ class Edge(VMobject):
         temp_line.set_stroke(color=color)
         return ShowPassingFlash(temp_line, time_width=1, run_time=1)
 
-    def create_overlay(
+    def create(self) -> AnimationGroup:
+        self.is_created = True
+        return AnimationGroup(Create(self))
+
+    def propagate_color(
         self,
         src_node: Optional["Node"] = None,
         dest_node: Optional["Node"] = None,
@@ -178,15 +185,23 @@ class Edge(VMobject):
             other_node = self.get_other_node(src_node or dest_node)
 
             if src_node:
-                new_line = Line(src_node.get_center(), other_node.get_center())
+                src_pos = src_node.get_center()
+                dest_pos = other_node.get_center()
             elif dest_node:
-                new_line = Line(other_node.get_center(), dest_node.get_center())
+                src_pos = other_node.get_center()
+                dest_pos = dest_node.get_center()
             else:
                 raise ValueError("Internal server error!")
 
-            new_line.set_stroke(color=color)
-
+            # This is necessary because we want to `ReverseCreate` the old line using the new `src_pos` and `dest_pos`.
+            # There are some lines that were created in the opposite direction because the graph is undirected.
+            # Without this, the `ReverseCreate` may remove the line in the opposite direction sometimes.
+            new_line = Line(src_pos, dest_pos)
             old_line = self.line
+            new_line.set_stroke(old_line.stroke_color)  # Maintain the old color
+            old_line.become(new_line)
+
+            new_line.set_stroke(color=color)
             self.line = new_line
 
             return AnimationGroup(ReverseCreate(old_line), Create(new_line))
@@ -215,7 +230,7 @@ class Node(VMobject):
         self.label = MathTex(r"\infty").scale(0.5)
         # self.label = MathTex(name).scale(0.5)
         self.cost = math.inf
-        self.out_edges: List["Edge"] = []
+        self.edges: List["Edge"] = []
         self.is_visited = False
 
         self.add(self.circle, self.label)
@@ -231,10 +246,15 @@ class Node(VMobject):
         """
 
         for node, weight in zip(out_neighbours, weights):
-            self.out_edges.append(Edge(weight=weight, nodes=(self, node)))
+            # bidirectional edges
+            edge = Edge(weight=weight, nodes=(self, node))
+            self.edges.append(edge)
+            node.edges.append(edge)
 
         return LaggedStart(
-            *[Create(edge) for edge in self.out_edges], run_time=1, lag_ratio=0.25
+            *[edge.create() for edge in self.edges if not edge.is_created],
+            run_time=1,
+            lag_ratio=0.25,
         )
 
     def visit(self, src_edge: Optional["Edge"] = None) -> AnimationGroup:
@@ -255,12 +275,16 @@ class Node(VMobject):
                 .move_to(self.get_center() + 0.5 * UP)
             ),
             Flash(self, color=PURPLE, flash_radius=0.5),
-            *[out_edge.create_overlay(src_node=self) for out_edge in self.out_edges],
+            *[
+                out_edge.propagate_color(src_node=self, color=RED)
+                for out_edge in self.edges
+            ],
         ]
 
         if src_edge:
             src_edge.is_part_of_tree = True
-            anims.append(src_edge.create_overlay(dest_node=self, color=PURPLE))
+            anims.append(src_edge.traverse(dest_node=self, color=WHITE))
+            anims.append(src_edge.propagate_color(dest_node=self, color=PURPLE))
 
         return AnimationGroup(*anims)
 
@@ -338,7 +362,9 @@ class Main(Scene):
 
         edges: List["Edge"] = []
         for node in graph_src:
-            edges.extend(node.out_edges)
+            for edge in node.edges:
+                if edge not in edges:
+                    edges.append(edge)
         edges.sort(
             key=lambda edge: -edge.line.get_center()[1]
         )  # sort by y-coordinate (height)
@@ -371,7 +397,7 @@ class Main(Scene):
 
             # Dull irrelevant edges
             irrev_edges = [
-                edge.create_overlay(color=GRAY)
+                edge.propagate_color(color=GRAY)
                 for edge in edges
                 if all(node.is_visited for node in edge.nodes)
                 and not edge.is_part_of_tree

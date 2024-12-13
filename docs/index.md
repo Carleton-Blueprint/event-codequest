@@ -2,12 +2,12 @@
 
 ## Event Title
 
-**^^CodeQuest 2024: ==Algorithm Visualization== Challenge^^** (AlgoViz)
+**^^CodeQuest 2024: Algorithm Visualization Challenge^^** (AlgoViz)
 
 ## The Challenge
 
-Participants are given [a set of algorithms](#algorithms) to implement and visualize. Resources to learn these algorithms for those who are unfamiliar will be provided.
-
+Participants are asked to create a graphically engaging animation to visualize an algorithm of their choosing.
+Here is a [a set of suggested algorithms](#algorithms) as an inspiration for what participants can choose from *(or not. If you have a better algo, use that!)*
 
 They will be judged on the quality of their visualization and the correctness or complexity of their implementation.
 
